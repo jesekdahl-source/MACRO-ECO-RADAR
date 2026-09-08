@@ -1,21 +1,40 @@
-steps:
-  - uses: actions/checkout@v7
+name: Refresh FRED data cache
 
-  - uses: actions/setup-python@v7
-    with:
-      python-version: "3.13"
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "data_cache/**"
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
 
-  - run: |
-      python -m pip install --upgrade pip
-      pip install pandas numpy requests
+permissions:
+  contents: write
 
-  - run: python refresh_fred_cache.py
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
-  - run: |
-      git config user.name "macro-eco-radar-bot"
-      git config user.email "actions@users.noreply.github.com"
-      git add data_cache/
-      git diff --cached --quiet && exit 0
-      git commit -m "chore: refresh FRED cache"
-      git pull --rebase origin main
-      git push origin HEAD:main
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests
+
+      - run: python refresh_fred_cache.py
+
+      - run: |
+          git config user.name "macro-eco-radar-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data_cache/
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: refresh FRED cache"
+          git pull --rebase origin main
+          git push origin HEAD:main
