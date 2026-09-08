@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import math
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Tuple
 
 import numpy as np
@@ -11,11 +12,10 @@ import requests
 import yfinance as yf
 
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
+CACHE_DIR = Path(__file__).resolve().parent / "data_cache"
 
-def fetch_fred(series: str, timeout: int = 20) -> pd.Series:
-    r = requests.get(FRED_CSV.format(series=series), timeout=timeout, headers={"User-Agent": "macro-dashboard/1.0"})
-    r.raise_for_status()
-    df = pd.read_csv(io.StringIO(r.text))
+def _parse_fred_csv_text(text: str, series: str) -> pd.Series:
+    df = pd.read_csv(io.StringIO(text))
     if df.shape[1] < 2:
         raise ValueError(f"Unexpected FRED response for {series}")
     date_col, value_col = df.columns[0], df.columns[1]
@@ -24,6 +24,30 @@ def fetch_fred(series: str, timeout: int = 20) -> pd.Series:
     s = df.dropna().set_index(date_col)[value_col].sort_index()
     s.name = series
     return s
+
+def _read_cached_fred(series: str):
+    path = CACHE_DIR / f"{series}.csv"
+    if not path.exists():
+        return None
+    try:
+        df = pd.read_csv(path)
+        if "DATE" not in df.columns or "VALUE" not in df.columns:
+            return None
+        df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
+        df["VALUE"] = pd.to_numeric(df["VALUE"], errors="coerce")
+        s = df.dropna().set_index("DATE")["VALUE"].sort_index()
+        s.name = series
+        return s if not s.empty else None
+    except Exception:
+        return None
+
+def fetch_fred(series: str, timeout: int = 12) -> pd.Series:
+    cached = _read_cached_fred(series)
+    if cached is not None:
+        return cached
+    r = requests.get(FRED_CSV.format(series=series), timeout=timeout, headers={"User-Agent":"macro-eco-radar/1.0"})
+    r.raise_for_status()
+    return _parse_fred_csv_text(r.text, series)
 
 def transform_series(s: pd.Series, transform: str) -> pd.Series:
     s = s.dropna().astype(float)
