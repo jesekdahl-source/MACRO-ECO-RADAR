@@ -1,5 +1,5 @@
-
 name: Refresh FRED data cache
+
 on:
   push:
     branches: [main]
@@ -8,25 +8,33 @@ on:
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+
       - run: |
           python -m pip install --upgrade pip
           pip install pandas numpy requests
+
       - run: python refresh_fred_cache.py
+
       - run: |
           git config user.name "macro-eco-radar-bot"
           git config user.email "actions@users.noreply.github.com"
           git add data_cache/
           git diff --cached --quiet && exit 0
           git commit -m "chore: refresh FRED cache"
-          git push
+          git pull --rebase origin main
+          git push origin HEAD:main
